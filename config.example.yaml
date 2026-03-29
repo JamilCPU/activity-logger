@@ -1,0 +1,143 @@
+# Activity Logger Configuration
+# Copy this file to ~/.activity-logger/config.yaml and customize.
+
+tracking:
+  poll_interval_seconds: 5        # How often to sample the active window
+  idle_threshold_minutes: 5       # Minutes without keyboard/mouse input = idle
+  min_session_seconds: 3          # Discard sessions shorter than this
+
+storage:
+  db_path: "~/.activity-logger/activity.db"
+
+dashboard:
+  port: 7070
+  host: "127.0.0.1"
+  auto_open_browser: true
+
+export:
+  focus_session_minutes: 30       # Minimum block length to show as a "focus session"
+
+# Category rules: matched top-to-bottom, first match wins.
+# app:     case-insensitive substring match against the process name
+# keyword: case-insensitive substring match against the window title
+categories:
+  - name: Gaming
+    apps:
+      - MarvelRivals
+      - steam
+      - EpicGamesLauncher
+      - Battle.net
+      - Valorant
+      - LeagueofLegends
+      - RiotClientServices
+      - destiny2
+      - Minecraft
+      - FortniteClient
+
+  - name: Development
+    apps:
+      - Code          # VS Code
+      - cursor
+      - pycharm64
+      - idea64
+      - webstorm64
+      - clion64
+      - WindowsTerminal
+      - cmd
+      - pwsh
+      - powershell
+      - bash
+      - wsl
+      - git
+      - devenv        # Visual Studio
+    keywords:
+      - GitHub
+      - GitLab
+      - localhost
+      - Stack Overflow
+      - MDN Web Docs
+      - npm
+      - pip install
+
+  - name: Communication
+    apps:
+      - Discord
+      - Slack
+      - Teams
+      - zoom
+      - WhatsApp
+      - Telegram
+      - signal
+      - outlook
+      - OUTLOOK
+      - thunderbird
+
+  - name: Productivity
+    apps:
+      - WINWORD
+      - EXCEL
+      - POWERPNT
+      - Notion
+      - Obsidian
+      - onenote
+      - acrobat
+      - AcroRd32
+    keywords:
+      - Notion
+      - Obsidian
+
+  - name: Media
+    apps:
+      - Spotify
+      - vlc
+      - mpv
+      - wmplayer
+      - mpc-hc64
+    keywords:
+      - YouTube
+      - Netflix
+      - Twitch
+      - Hulu
+      - Disney+
+      - Prime Video
+      - Spotify
+
+  - name: Browsing
+    apps:
+      - chrome
+      - firefox
+      - msedge
+      - brave
+      - opera
+      - vivaldi
+      - safari
+
+  - name: System
+    apps:
+      - explorer
+      - taskmgr
+      - regedit
+      - mmc
+      - msiexec
+      - SettingsSyncHost
+      - SystemSettings
+      - SearchApp
+
+# Display name overrides: map process name substrings to friendly names.
+# Without an entry here, the process name is cleaned up automatically.
+display_names:
+  chrome: "Google Chrome"
+  msedge: "Microsoft Edge"
+  Code: "VS Code"
+  cursor: "Cursor"
+  WINWORD: "Microsoft Word"
+  EXCEL: "Microsoft Excel"
+  POWERPNT: "Microsoft PowerPoint"
+  MarvelRivals: "Marvel Rivals"
+  EpicGamesLauncher: "Epic Games"
+  LeagueofLegends: "League of Legends"
+  pycharm64: "PyCharm"
+  idea64: "IntelliJ IDEA"
+  WindowsTerminal: "Windows Terminal"
+  pwsh: "PowerShell"
+  devenv: "Visual Studio"
