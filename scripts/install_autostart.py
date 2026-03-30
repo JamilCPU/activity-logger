@@ -19,47 +19,56 @@ def find_executable() -> str:
     exe = shutil.which("activity-logger")
     if exe:
         return exe
-    # Try in the same venv as the current Python
+    # Try common user-local Scripts dirs on Windows
     if sys.platform == "win32":
-        candidate = Path(sys.prefix) / "Scripts" / "activity-logger.exe"
+        candidates = [
+            Path(sys.prefix) / "Scripts" / "activity-logger.exe",
+            Path.home() / "AppData" / "Local" / "Programs" / "Python" / "Scripts" / "activity-logger.exe",
+        ]
+        # Also search all LocalCache package dirs
+        local_cache = Path.home() / "AppData" / "Local" / "Packages"
+        if local_cache.exists():
+            for pkg in local_cache.glob("PythonSoftwareFoundation*"):
+                c = pkg / "LocalCache" / "local-packages" / "Python313" / "Scripts" / "activity-logger.exe"
+                candidates.append(c)
+        for c in candidates:
+            if c.exists():
+                return str(c)
     else:
         candidate = Path(sys.prefix) / "bin" / "activity-logger"
-    if candidate.exists():
-        return str(candidate)
-    raise RuntimeError(
-        "activity-logger not found on PATH. "
-        "Make sure you've run: pip install -e ."
-    )
+        if candidate.exists():
+            return str(candidate)
+    # Fallback: use python -m activity_logger
+    return f'"{sys.executable}" -m activity_logger'
 
 
 # ── Windows ───────────────────────────────────────────────────────────────────
 
+WINDOWS_STARTUP_DIR = (
+    Path.home() / "AppData" / "Roaming" / "Microsoft" / "Windows"
+    / "Start Menu" / "Programs" / "Startup"
+)
+WINDOWS_BAT = WINDOWS_STARTUP_DIR / "activity-logger.bat"
+
+
 def install_windows(exe: str) -> None:
-    task_name = "ActivityLogger"
-    cmd = (
-        f'schtasks /Create /TN "{task_name}" '
-        f'/TR "\\"{exe}\\" start" '
-        '/SC ONLOGON /RL LIMITED /F'
+    WINDOWS_STARTUP_DIR.mkdir(parents=True, exist_ok=True)
+    # Write a small .bat that launches the tracker hidden (no console window)
+    bat = (
+        f'@echo off\n'
+        f'start "" /B "{exe}" start --foreground\n'
     )
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-    if result.returncode == 0:
-        print(f"Task Scheduler entry '{task_name}' created.")
-        print("Activity logger will start automatically on next login.")
-    else:
-        print(f"Failed to create task: {result.stderr}", file=sys.stderr)
-        sys.exit(1)
+    WINDOWS_BAT.write_text(bat)
+    print(f"Startup entry created: {WINDOWS_BAT}")
+    print("Activity logger will start automatically on next login.")
 
 
 def remove_windows() -> None:
-    task_name = "ActivityLogger"
-    result = subprocess.run(
-        f'schtasks /Delete /TN "{task_name}" /F',
-        shell=True, capture_output=True, text=True
-    )
-    if result.returncode == 0:
-        print(f"Task Scheduler entry '{task_name}' removed.")
+    if WINDOWS_BAT.exists():
+        WINDOWS_BAT.unlink()
+        print(f"Startup entry removed: {WINDOWS_BAT}")
     else:
-        print(f"Could not remove task (may not exist): {result.stderr}")
+        print("No startup entry found to remove.")
 
 
 # ── macOS ─────────────────────────────────────────────────────────────────────
