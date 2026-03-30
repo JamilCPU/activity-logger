@@ -173,9 +173,9 @@ def status(ctx: click.Context) -> None:
     """Show tracker status and today's top apps."""
     pid = _read_pid()
     if pid and _is_running(pid):
-        click.echo(click.style(f"● Tracker is running  (PID {pid})", fg="green"))
+        click.echo(click.style(f"[ON]  Tracker is running  (PID {pid})", fg="green"))
     else:
-        click.echo(click.style("○ Tracker is NOT running", fg="yellow"))
+        click.echo(click.style("[OFF] Tracker is NOT running", fg="yellow"))
         if pid:
             _clear_pid()
 
@@ -195,7 +195,7 @@ def status(ctx: click.Context) -> None:
         click.echo("\nTop apps:")
         for row in app_totals[:10]:
             pct = row["total_seconds"] / active_secs * 100 if active_secs else 0
-            bar = "█" * int(pct / 5)
+            bar = "#" * int(pct / 5)
             click.echo(f"  {row['display_name']:<28} {_fmt(row['total_seconds']):<8} {bar} {pct:.1f}%")
     else:
         click.echo("  No activity recorded yet today.")
@@ -285,7 +285,7 @@ def summary(ctx: click.Context, days: int) -> None:
         active = sum(r["total_seconds"] for r in apps)
         top_app = apps[0]["display_name"] if apps else "—"
 
-        marker = " ◀ today" if i == 0 else ""
+        marker = " <- today" if i == 0 else ""
         click.echo(f"{str(d):<12} {_fmt(active):>8} {_fmt(idle):>8}  {top_app}{marker}")
 
     click.echo()
