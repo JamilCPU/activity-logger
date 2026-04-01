@@ -84,6 +84,42 @@
     }
     .export-btn:hover { background: #4f52d9 !important; }
 
+    .device-toggle {
+      display: flex;
+      gap: 2px;
+      background: var(--border);
+      border-radius: 8px;
+      padding: 3px;
+    }
+    .dev-btn {
+      background: transparent !important;
+      border: none;
+      color: var(--muted);
+      padding: 4px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+    .dev-btn.active {
+      background: var(--surface) !important;
+      color: var(--text);
+    }
+    .dev-btn:hover:not(.active) { color: var(--text); }
+
+    .device-badge {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .device-badge.phone { background: #10b98122; color: #10b981; }
+    .device-badge.pc    { background: #6366f122; color: #6366f1; }
+
     main {
       padding: 24px;
       max-width: 1400px;
@@ -238,6 +274,11 @@
     <div class="subtitle" id="header-subtitle">Loading…</div>
   </div>
   <div class="date-nav">
+    <div class="device-toggle">
+      <button class="dev-btn active" data-dev="all" onclick="setDevice('all')">All</button>
+      <button class="dev-btn" data-dev="pc" onclick="setDevice('pc')">PC</button>
+      <button class="dev-btn" data-dev="phone" onclick="setDevice('phone')">Phone</button>
+    </div>
     <button onclick="shiftDay(-1)">◀</button>
     <input type="date" id="date-picker" onchange="loadDate(this.value)" />
     <button onclick="shiftDay(1)">▶</button>
@@ -371,9 +412,18 @@ function shiftDay(delta) {
 // ── State ─────────────────────────────────────────────────────────────────────
 
 let currentDate = todayStr();
+let currentDevice = "all";
 let catChartInst = null;
 let hourlyChartInst = null;
 let timelineChartInst = null;
+
+function setDevice(dev) {
+  currentDevice = dev;
+  document.querySelectorAll('.dev-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.dev === dev)
+  );
+  loadDate(currentDate);
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -401,9 +451,10 @@ async function loadDate(date) {
   currentDate = date;
   document.getElementById("date-picker").value = date;
 
+  const dq = currentDevice !== "all" ? `&device=${currentDevice}` : "";
   const [summaryRes, timelineRes] = await Promise.all([
-    fetch(`/api/summary?date=${date}`),
-    fetch(`/api/timeline?date=${date}`),
+    fetch(`/api/summary?date=${date}${dq}`),
+    fetch(`/api/timeline?date=${date}${dq}`),
   ]);
 
   const summary = await summaryRes.json();

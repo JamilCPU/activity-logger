@@ -27,6 +27,7 @@ def create_app(db: Database, config: Config) -> Flask:
     @app.route("/api/summary")
     def api_summary():
         date_str = request.args.get("date", datetime.date.today().isoformat())
+        device = _parse_device(request.args.get("device"))
         try:
             date = datetime.date.fromisoformat(date_str)
         except ValueError:
@@ -35,11 +36,11 @@ def create_app(db: Database, config: Config) -> Flask:
         start_ts, end_ts = _day_range(date)
         db: Database = app.config["db"]
 
-        app_totals = db.get_app_totals(start_ts, end_ts)
-        cat_totals = db.get_category_totals(start_ts, end_ts)
-        idle_secs = db.get_idle_total(start_ts, end_ts)
+        app_totals = db.get_app_totals(start_ts, end_ts, device=device)
+        cat_totals = db.get_category_totals(start_ts, end_ts, device=device)
+        idle_secs = db.get_idle_total(start_ts, end_ts, device=device)
         active_secs = sum(r["total_seconds"] for r in app_totals)
-        hourly = db.get_hourly_breakdown(start_ts, end_ts)
+        hourly = db.get_hourly_breakdown(start_ts, end_ts, device=device)
 
         return jsonify(
             date=date_str,
@@ -55,6 +56,7 @@ def create_app(db: Database, config: Config) -> Flask:
     @app.route("/api/timeline")
     def api_timeline():
         date_str = request.args.get("date", datetime.date.today().isoformat())
+        device = _parse_device(request.args.get("device"))
         try:
             date = datetime.date.fromisoformat(date_str)
         except ValueError:
@@ -62,7 +64,7 @@ def create_app(db: Database, config: Config) -> Flask:
 
         start_ts, end_ts = _day_range(date)
         db: Database = app.config["db"]
-        sessions = db.get_sessions(start_ts, end_ts, include_idle=True)
+        sessions = db.get_sessions(start_ts, end_ts, include_idle=True, device=device)
 
         return jsonify(sessions=[
             {
@@ -73,6 +75,7 @@ def create_app(db: Database, config: Config) -> Flask:
                 "end": s.end_time,
                 "duration": s.duration_seconds,
                 "is_idle": s.is_idle,
+                "device": s.device,
             }
             for s in sessions
         ])
@@ -134,10 +137,18 @@ def create_app(db: Database, config: Config) -> Flask:
     @app.route("/api/recent")
     def api_recent():
         limit = int(request.args.get("limit", 20))
+        device = _parse_device(request.args.get("device"))
         db: Database = app.config["db"]
-        return jsonify(sessions=db.get_recent_activity(limit))
+        return jsonify(sessions=db.get_recent_activity(limit, device=device))
 
     return app
+
+
+def _parse_device(value: str | None) -> str | None:
+    """Return device filter string, or None if 'all' / not provided."""
+    if value in (None, "", "all"):
+        return None
+    return value
 
 
 def _day_range(date: datetime.date) -> tuple[float, float]:
