@@ -100,12 +100,22 @@ def start(ctx: click.Context, foreground: bool, verbose: bool) -> None:
     from activity_logger.tracker import Tracker
     tracker = Tracker(config=cfg, db=db)
 
+    phone_sync = None
+    if cfg.phone_sync_enabled:
+        from activity_logger.sync.phone import PhoneSyncThread
+        phone_sync = PhoneSyncThread(config=cfg, db=db)
+
     if foreground:
         click.echo("Starting activity tracker in foreground (Ctrl+C to stop)…")
+        if phone_sync:
+            click.echo(f"Phone sync enabled — target: {cfg.phone_sync_ip}:{cfg.phone_sync_port}")
+            phone_sync.start()
         _write_pid(os.getpid())
         try:
             tracker.run_forever()
         finally:
+            if phone_sync:
+                phone_sync.stop()
             _clear_pid()
             db.close()
     else:
@@ -260,6 +270,48 @@ def export(ctx: click.Context, date: str | None, days: int, fmt: str, output: st
         click.echo(f"Report written to {output}")
     else:
         click.echo(report)
+
+
+# ── sync-phone ────────────────────────────────────────────────────────────────
+
+@cli.command("sync-phone")
+@click.option("--watch", "-w", is_flag=True, help="Run continuously (don't exit after one sync)")
+@click.option("--verbose", "-v", is_flag=True, help="Show debug logs")
+@click.pass_context
+def sync_phone(ctx: click.Context, watch: bool, verbose: bool) -> None:
+    """Sync activity from ActivityWatch on your phone (one-shot or continuous)."""
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(level=level, format="%(asctime)s %(levelname)s %(message)s")
+
+    db, cfg = _get_db_and_config(ctx.obj.get("config_path"))
+
+    if not cfg.phone_sync_ip:
+        click.echo("Error: phone_sync.tailscale_ip is not set in config.yaml", err=True)
+        db.close()
+        return
+
+    from activity_logger.sync.phone import sync_once, PhoneSyncThread
+
+    if not watch:
+        click.echo(f"Syncing from {cfg.phone_sync_ip}:{cfg.phone_sync_port}…")
+        n = sync_once(cfg, db)
+        click.echo(f"Done — {n} sessions inserted.")
+        db.close()
+    else:
+        click.echo(
+            f"Phone sync running every {cfg.phone_sync_interval}s — Ctrl+C to stop"
+        )
+        syncer = PhoneSyncThread(config=cfg, db=db)
+        syncer.start()
+        try:
+            while syncer.is_running():
+                time.sleep(1)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            syncer.stop()
+            db.close()
+        click.echo("Phone sync stopped.")
 
 
 # ── summary ───────────────────────────────────────────────────────────────────

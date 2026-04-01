@@ -106,6 +106,7 @@ class Database:
         category: str,
         is_idle: bool,
         start_time: float | None = None,
+        device: str = "pc",
     ) -> int:
         """Insert a new open session; return its row ID."""
         now = start_time or time.time()
@@ -114,13 +115,42 @@ class Database:
                 """
                 INSERT INTO sessions
                     (app_name, display_name, window_title, process_name,
-                     exe_path, category, start_time, is_idle)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                     exe_path, category, start_time, is_idle, device)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (app_name, display_name, window_title, process_name,
-                 exe_path, category, now, int(is_idle)),
+                 exe_path, category, now, int(is_idle), device),
             )
             return cur.lastrowid  # type: ignore[return-value]
+
+    def insert_completed_session(
+        self,
+        app_name: str,
+        display_name: str,
+        window_title: str,
+        process_name: str,
+        exe_path: str,
+        category: str,
+        is_idle: bool,
+        start_time: float,
+        end_time: float,
+        device: str = "pc",
+    ) -> None:
+        """Insert a fully completed session from a remote source (e.g. phone sync)."""
+        duration = end_time - start_time
+        if duration < 1:
+            return
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO sessions
+                    (app_name, display_name, window_title, process_name,
+                     exe_path, category, start_time, end_time, duration_seconds, is_idle, device)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (app_name, display_name, window_title, process_name,
+                 exe_path, category, start_time, end_time, duration, int(is_idle), device),
+            )
 
     def close_session(
         self,
@@ -160,6 +190,7 @@ class Database:
         start_ts: float,
         end_ts: float,
         include_idle: bool = True,
+        device: str | None = None,
     ) -> list[Session]:
         """Return all completed sessions in a time range."""
         query = """
@@ -170,6 +201,9 @@ class Database:
         params: list = [start_ts, end_ts]
         if not include_idle:
             query += " AND is_idle = 0"
+        if device:
+            query += " AND device = ?"
+            params.append(device)
         query += " ORDER BY start_time"
 
         with self._cursor() as cur:
@@ -181,6 +215,7 @@ class Database:
         start_ts: float,
         end_ts: float,
         include_idle: bool = False,
+        device: str | None = None,
     ) -> list[dict]:
         """Aggregate total time per display_name in a range."""
         query = """
@@ -188,23 +223,28 @@ class Database:
                 display_name,
                 app_name,
                 category,
+                device,
                 SUM(duration_seconds) AS total_seconds,
                 COUNT(*) AS session_count
             FROM sessions
             WHERE start_time >= ? AND start_time < ?
               AND end_time IS NOT NULL
               AND is_idle = ?
-            GROUP BY display_name
-            ORDER BY total_seconds DESC
         """
+        params: list = [start_ts, end_ts, 0 if not include_idle else 1]
+        if device:
+            query += " AND device = ?"
+            params.append(device)
+        query += " GROUP BY display_name ORDER BY total_seconds DESC"
         with self._cursor() as cur:
-            cur.execute(query, [start_ts, end_ts, 0 if not include_idle else 1])
+            cur.execute(query, params)
             return [dict(r) for r in cur.fetchall()]
 
     def get_category_totals(
         self,
         start_ts: float,
         end_ts: float,
+        device: str | None = None,
     ) -> list[dict]:
         """Aggregate total time per category in a range."""
         query = """
@@ -216,34 +256,45 @@ class Database:
             WHERE start_time >= ? AND start_time < ?
               AND end_time IS NOT NULL
               AND is_idle = 0
-            GROUP BY category
-            ORDER BY total_seconds DESC
         """
+        params: list = [start_ts, end_ts]
+        if device:
+            query += " AND device = ?"
+            params.append(device)
+        query += " GROUP BY category ORDER BY total_seconds DESC"
         with self._cursor() as cur:
-            cur.execute(query, [start_ts, end_ts])
+            cur.execute(query, params)
             return [dict(r) for r in cur.fetchall()]
 
-    def get_idle_total(self, start_ts: float, end_ts: float) -> float:
+    def get_idle_total(
+        self,
+        start_ts: float,
+        end_ts: float,
+        device: str | None = None,
+    ) -> float:
         """Return total idle seconds in range."""
+        query = """
+            SELECT COALESCE(SUM(duration_seconds), 0)
+            FROM sessions
+            WHERE start_time >= ? AND start_time < ?
+              AND end_time IS NOT NULL AND is_idle = 1
+        """
+        params: list = [start_ts, end_ts]
+        if device:
+            query += " AND device = ?"
+            params.append(device)
         with self._cursor() as cur:
-            cur.execute(
-                """
-                SELECT COALESCE(SUM(duration_seconds), 0)
-                FROM sessions
-                WHERE start_time >= ? AND start_time < ?
-                  AND end_time IS NOT NULL AND is_idle = 1
-                """,
-                [start_ts, end_ts],
-            )
+            cur.execute(query, params)
             return float(cur.fetchone()[0])
 
     def get_hourly_breakdown(
         self,
         start_ts: float,
         end_ts: float,
+        device: str | None = None,
     ) -> dict[int, float]:
         """Return active seconds per hour-of-day for a range."""
-        sessions = self.get_sessions(start_ts, end_ts, include_idle=False)
+        sessions = self.get_sessions(start_ts, end_ts, include_idle=False, device=device)
         hourly: dict[int, float] = {h: 0.0 for h in range(24)}
         for s in sessions:
             if s.end_time is None or s.duration_seconds is None:
@@ -265,20 +316,22 @@ class Database:
                 t = next_hour_start
         return hourly
 
-    def get_recent_activity(self, limit: int = 20) -> list[dict]:
+    def get_recent_activity(self, limit: int = 20, device: str | None = None) -> list[dict]:
         """Return the most recent completed sessions."""
+        query = """
+            SELECT display_name, window_title, category, start_time,
+                   end_time, duration_seconds, is_idle, device
+            FROM sessions
+            WHERE end_time IS NOT NULL
+        """
+        params: list = []
+        if device:
+            query += " AND device = ?"
+            params.append(device)
+        query += " ORDER BY start_time DESC LIMIT ?"
+        params.append(limit)
         with self._cursor() as cur:
-            cur.execute(
-                """
-                SELECT display_name, window_title, category, start_time,
-                       end_time, duration_seconds, is_idle
-                FROM sessions
-                WHERE end_time IS NOT NULL
-                ORDER BY start_time DESC
-                LIMIT ?
-                """,
-                [limit],
-            )
+            cur.execute(query, params)
             return [dict(r) for r in cur.fetchall()]
 
     def get_available_dates(self, limit: int = 90) -> list[str]:
@@ -298,6 +351,7 @@ class Database:
 
 
 def _row_to_session(row: sqlite3.Row) -> Session:
+    keys = row.keys()
     return Session(
         id=row["id"],
         app_name=row["app_name"],
@@ -310,4 +364,5 @@ def _row_to_session(row: sqlite3.Row) -> Session:
         end_time=row["end_time"],
         duration_seconds=row["duration_seconds"],
         is_idle=bool(row["is_idle"]),
+        device=row["device"] if "device" in keys else "pc",
     )
