@@ -356,20 +356,16 @@ function fmtDuration(secs) {
 }
 
 function todayStr() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return "{{ today }}";
 }
 
 function shiftDay(delta) {
-  const d = new Date(currentDate + "T12:00:00");
-  d.setDate(d.getDate() + delta);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  loadDate(`${y}-${m}-${day}`);
+  const [y, m, d] = currentDate.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + delta);
+  const ny = dt.getFullYear();
+  const nm = String(dt.getMonth() + 1).padStart(2, '0');
+  const nd = String(dt.getDate()).padStart(2, '0');
+  loadDate(`${ny}-${nm}-${nd}`);
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -382,8 +378,22 @@ let timelineChartInst = null;
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.getElementById("date-picker").value = currentDate;
-loadDate(currentDate);
 loadHeatmap();
+
+// Start on today. If today has no data yet, fall back to the most recent
+// date that does — so the user always lands on something meaningful.
+(async () => {
+  const res = await fetch(`/api/summary?date=${currentDate}`);
+  const data = await res.json();
+  if (data.active_seconds > 0 || data.idle_seconds > 0) {
+    loadDate(currentDate);
+  } else {
+    const datesRes = await fetch('/api/dates');
+    const { dates } = await datesRes.json();
+    const fallback = dates && dates.length > 0 ? dates[0] : currentDate;
+    loadDate(fallback);
+  }
+})();
 
 // ── Load date ─────────────────────────────────────────────────────────────────
 

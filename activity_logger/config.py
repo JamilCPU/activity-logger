@@ -9,6 +9,12 @@ from typing import Any
 import yaml
 
 DEFAULT_CONFIG: dict[str, Any] = {
+    "phone_sync": {
+        "enabled": False,
+        "tailscale_ip": "",
+        "aw_port": 5600,
+        "sync_interval_seconds": 60,
+    },
     "tracking": {
         "poll_interval_seconds": 5,
         "idle_threshold_minutes": 5,
@@ -171,6 +177,22 @@ class Config:
                 if kw.lower() in title_lower:
                     return cat["name"]
         return "Other"
+
+    @property
+    def phone_sync_enabled(self) -> bool:
+        return bool(self._data.get("phone_sync", {}).get("enabled", False))
+
+    @property
+    def phone_sync_ip(self) -> str:
+        return self._data.get("phone_sync", {}).get("tailscale_ip", "")
+
+    @property
+    def phone_sync_port(self) -> int:
+        return int(self._data.get("phone_sync", {}).get("aw_port", 5600))
+
+    @property
+    def phone_sync_interval(self) -> int:
+        return int(self._data.get("phone_sync", {}).get("sync_interval_seconds", 60))
 
     def resolve_display_name(self, process_name: str) -> str:
         """Return a human-friendly app name."""

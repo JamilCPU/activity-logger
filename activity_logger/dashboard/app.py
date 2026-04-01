@@ -19,7 +19,8 @@ def create_app(db: Database, config: Config) -> Flask:
 
     @app.route("/")
     def index():
-        return render_template("index.html")
+        today = datetime.date.today().isoformat()
+        return render_template("index.html", today=today)
 
     # ── Summary ───────────────────────────────────────────────────────────────
 
