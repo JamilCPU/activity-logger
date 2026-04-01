@@ -21,13 +21,19 @@ CREATE TABLE IF NOT EXISTS sessions (
     start_time       REAL    NOT NULL,
     end_time         REAL,
     duration_seconds REAL,
-    is_idle          INTEGER NOT NULL DEFAULT 0
+    is_idle          INTEGER NOT NULL DEFAULT 0,
+    device           TEXT    NOT NULL DEFAULT 'pc'
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_start    ON sessions(start_time);
 CREATE INDEX IF NOT EXISTS idx_sessions_app      ON sessions(app_name);
 CREATE INDEX IF NOT EXISTS idx_sessions_category ON sessions(category);
 CREATE INDEX IF NOT EXISTS idx_sessions_idle     ON sessions(is_idle);
+CREATE INDEX IF NOT EXISTS idx_sessions_device   ON sessions(device);
+"""
+
+_MIGRATION_ADD_DEVICE = """
+ALTER TABLE sessions ADD COLUMN device TEXT NOT NULL DEFAULT 'pc'
 """
 
 
@@ -44,6 +50,7 @@ class Session:
     end_time: float | None
     duration_seconds: float | None
     is_idle: bool
+    device: str = "pc"
 
 
 class Database:
@@ -58,6 +65,15 @@ class Database:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.executescript(SCHEMA)
+        # Migration: add device column for existing databases
+        try:
+            self._conn.execute(_MIGRATION_ADD_DEVICE)
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sessions_device ON sessions(device)"
+            )
+            self._conn.commit()
+        except sqlite3.OperationalError:
+            pass  # column already exists
         self._conn.commit()
 
     def close(self) -> None:
