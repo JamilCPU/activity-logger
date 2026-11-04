@@ -44,3 +44,16 @@ htmlcov/
 # Distribution
 *.tar.gz
 *.zip
+.env
+.env.*
+!.env.example
+*.keys
+*.sqlite
+*.sqlite3
+*.pyc
+node_modules/
+bin/
+obj/
+.vs/
+*.class
+target/

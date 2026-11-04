@@ -2,7 +2,14 @@
 
 A lightweight personal activity tracker that logs every app you use, detects when you're idle, and produces clean reports you can feed directly to an AI for habit analysis and insights.
 
-**All data stays on your machine — nothing is ever transmitted anywhere.**
+**All data stays on your machine. The tracker itself never sends data anywhere.**
+
+## Stack
+
+- Python 3.10+
+- Click (CLI), Flask (local dashboard), SQLite (storage), PyYAML (config)
+- `psutil`, `pywin32` (Windows), `xdotool` and `xprintidle` (Linux), AppleScript (macOS) for window and idle detection
+- `pystray` and Pillow for the tray icon
 
 ---
 
@@ -18,10 +25,12 @@ A lightweight personal activity tracker that logs every app you use, detects whe
 
 ---
 
-## Install
+## Running
+
+### Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/activity-logger
+git clone https://github.com/JamilCPU/activity-logger
 cd activity-logger
 pip install -e .
 ```
@@ -36,7 +45,7 @@ pip install -e .
 
 ---
 
-## Quick Start
+### Quick Start
 
 ```bash
 # Start tracking in the background
@@ -173,6 +182,12 @@ activity-logger export        Generate an activity report
 activity-logger summary       Quick N-day terminal table
   --days N                    Number of days (default: 7)
 ```
+
+---
+
+## Phone sync (optional)
+
+If you also run ActivityWatch on an Android phone, `activity-logger sync-phone` (add `--watch` to keep running) pulls its sessions into the same database. It needs `phone_sync.tailscale_ip` set in `config.yaml`; leave it unset to keep everything desktop-only. Data is fetched over a private Tailscale connection, so this is the one case where activity data leaves the machine it was recorded on.
 
 ---
 
